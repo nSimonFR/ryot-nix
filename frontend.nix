@@ -83,6 +83,11 @@ stdenv.mkDerivation (finalAttrs: {
     CI = "1";
     TURBO_TELEMETRY_DISABLED = "1";
     DO_NOT_TRACK = "1";
+    # `CI=1` makes yarn enable immutable installs, which rejects the offline yarn's
+    # in-place rewrite of the typescript builtin-compat @patch checksum (a purely
+    # local recompute — the offline-patched yarn hashes it differently than the
+    # yarn that wrote the lock). Allow that rewrite; it needs no network.
+    YARN_ENABLE_IMMUTABLE_INSTALLS = "false";
     # node-gyp (if any native addon rebuilds) resolves headers offline.
     npm_config_nodedir = "${nodejs_24}";
   };
