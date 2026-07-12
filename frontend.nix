@@ -113,6 +113,11 @@ stdenv.mkDerivation (finalAttrs: {
     cp -a apps/frontend/build         "$dest/build"
     cp -a apps/frontend/node_modules  "$dest/node_modules"
     cp -a apps/frontend/package.json  "$dest/package.json"
+    # apps/frontend/node_modules/@ryot/{graphql,generated,ts-utils} are workspace
+    # symlinks resolving to <root>/libs/* (relative), which react-router-serve
+    # imports at runtime. Ship the built libs at the matching relative location
+    # so the symlinks aren't dangling (else stdenv's noBrokenSymlinks fails).
+    cp -a libs                        "$dest/libs"
 
     mkdir -p $out/bin
     cat > $out/bin/ryot-frontend <<EOF
