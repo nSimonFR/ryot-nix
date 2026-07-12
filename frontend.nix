@@ -18,6 +18,7 @@
 {
   lib,
   stdenv,
+  fetchFromGitHub,
   nodejs_24,
   yarn-berry_4,
   src,
@@ -25,7 +26,22 @@
 }:
 
 let
-  inherit (yarn-berry_4) fetchYarnBerryDeps yarnBerryConfigHook;
+  # nixpkgs' yarn-berry_4 is 4.14.1, but Ryot pins yarn 4.1.1. A newer yarn treats
+  # Ryot's version-8 lockfile as stale (lockfileNeedsRefresh = 8 < 9) and runs a
+  # NETWORK resolution step — which fails in the sandbox (EAI_AGAIN). Pin yarn to
+  # the exact 4.1.1 that wrote the lockfile so no refresh/resolution happens and
+  # the install stays fully offline. (berry builds offline from its committed
+  # zero-install cache, so no extra deps fetch.)
+  yarnBerry = yarn-berry_4.overrideAttrs (_: {
+    version = "4.1.1";
+    src = fetchFromGitHub {
+      owner = "yarnpkg";
+      repo = "berry";
+      tag = "@yarnpkg/cli/4.1.1";
+      hash = "sha256-75bERA1uZeywMjYznFDyk4+AtVDLo7eIajVtWdAD/RA=";
+    };
+  });
+  inherit (yarnBerry) fetchYarnBerryDeps yarnBerryConfigHook;
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "ryot-frontend";
@@ -46,26 +62,16 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-lqNKHtGSRyQkD2OK8pP9gnqq6+ASdshPaxeLrmxHroI=";
   };
 
-  # nixpkgs' yarn-berry_4 is 4.14.1 while Ryot pins yarn 4.1.1. When 4.14.1's
-  # offline install reads Ryot's version-8 lockfile it wants to apply
-  # LOCKFILE_MIGRATION_RULES (which write settings) — forbidden offline, so it
-  # throws ("expects lockfile version 8..."). The rules matching a <9 lockfile
-  # are `approvedGitRepositories` and `enableScripts`; once their config source
-  # is defined the migration is skipped. Also drop yarnPath so the nixpkgs yarn
-  # (not the pinned 4.1.1 launcher) is used consistently through the build.
+  # Drop the yarnPath launcher pin so the (matching-4.1.1) nixpkgs yarn is used
+  # rather than re-execing the project's committed, non-offline-patched binary.
   postPatch = ''
     substituteInPlace .yarnrc.yml \
       --replace-fail 'yarnPath: .yarn/releases/yarn-4.1.1.cjs' ""
-    {
-      echo 'approvedGitRepositories:'
-      echo '  - "**"'
-      echo 'enableScripts: true'
-    } >> .yarnrc.yml
   '';
 
   nativeBuildInputs = [
     nodejs_24
-    yarn-berry_4
+    yarnBerry
     yarnBerryConfigHook # runs `yarn install --immutable` from offlineCache
   ];
 
@@ -80,13 +86,12 @@ stdenv.mkDerivation (finalAttrs: {
   buildPhase = ''
     runHook preBuild
 
-    # turbo is a root devDependency; build the frontend + its workspace libs
-    # (@ryot/generated, @ryot/graphql, @ryot/ts-utils) via the dependency graph.
-    yarn turbo run build --filter=@ryot/frontend
-
-    # Prune node_modules to production deps for the frontend workspace (its deps
-    # live in apps/frontend/node_modules due to hoistingLimits=workspaces).
-    yarn workspaces focus @ryot/frontend --production
+    # Invoke turbo directly (not via `yarn`) so no second lockfile check can reach
+    # for the network. turbo is a root devDependency; --filter builds the frontend
+    # plus its workspace libs (@ryot/generated, @ryot/graphql, @ryot/ts-utils).
+    # We ship the full install rather than `yarn workspaces focus --production`
+    # (which would trigger a second, network-touching resolve).
+    ./node_modules/.bin/turbo run build --filter=@ryot/frontend
 
     runHook postBuild
   '';
