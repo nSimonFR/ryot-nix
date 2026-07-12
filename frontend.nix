@@ -63,7 +63,7 @@ stdenv.mkDerivation (finalAttrs: {
     # the fetcher needs them supplied. Regenerate on bump with:
     #   yarn-berry-fetcher missing-hashes yarn.lock > missing-hashes.json
     missingHashes = ./missing-hashes.json;
-    hash = "sha256-lqNKHtGSRyQkD2OK8pP9gnqq6+ASdshPaxeLrmxHroI=";
+    hash = "sha256-dehAH4W/uDurdCPFkwlgSkpciodslojWd0TxCTUb0L8="; # offline output embeds the v9 yarn.lock
   };
 
   # Drop the yarnPath launcher pin so the nixpkgs yarn (offline-patched) is used
