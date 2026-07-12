@@ -6,11 +6,10 @@
 #   1. yarnBerryConfigHook  → offline `yarn install` from a fixed-output cache.
 #   2. turbo run build --filter=@ryot/frontend → Vite/React-Router build into
 #      apps/frontend/build.
-#   3. yarn workspaces focus @ryot/frontend --production → prune to runtime deps.
 #
-# Yarn Berry 4.1.1 (packageManager pin), nodeLinker: node-modules. The frontend
-# workspace sets `installConfig.hoistingLimits = "workspaces"`, so its deps land
-# in apps/frontend/node_modules (not hoisted to the root) — exactly what the
+# Yarn Berry, nodeLinker: node-modules. The frontend workspace sets
+# `installConfig.hoistingLimits = "workspaces"`, so its deps land in
+# apps/frontend/node_modules (not hoisted to the root) — exactly what the
 # Dockerfile copies and what react-router-serve needs at runtime.
 #
 # Output: $out/share/ryot-frontend/{build,node_modules,package.json} plus a
@@ -18,7 +17,7 @@
 {
   lib,
   stdenv,
-  fetchFromGitHub,
+  applyPatches,
   nodejs_24,
   yarn-berry_4,
   src,
@@ -26,26 +25,30 @@
 }:
 
 let
-  # nixpkgs' yarn-berry_4 is 4.14.1, but Ryot pins yarn 4.1.1. A newer yarn treats
-  # Ryot's version-8 lockfile as stale (lockfileNeedsRefresh = 8 < 9) and runs a
-  # NETWORK resolution step — which fails in the sandbox (EAI_AGAIN). Pin yarn to
-  # the exact 4.1.1 that wrote the lockfile so no refresh/resolution happens and
-  # the install stays fully offline. (berry builds offline from its committed
-  # zero-install cache, so no extra deps fetch.)
-  yarnBerry = yarn-berry_4.overrideAttrs (_: {
-    version = "4.1.1";
-    src = fetchFromGitHub {
-      owner = "yarnpkg";
-      repo = "berry";
-      tag = "@yarnpkg/cli/4.1.1";
-      hash = "sha256-75bERA1uZeywMjYznFDyk4+AtVDLo7eIajVtWdAD/RA=";
-    };
-  });
-  inherit (yarnBerry) fetchYarnBerryDeps yarnBerryConfigHook;
+  inherit (yarn-berry_4) fetchYarnBerryDeps yarnBerryConfigHook;
+
+  # Version skew: nixpkgs' yarn-berry_4 is 4.14.1, but Ryot's lockfile was written
+  # by yarn 4.1.1 and is `__metadata.version: 8`. yarn 4.14.1 targets lockfile
+  # version 9, so it treats v8 as stale (lockfileNeedsRefresh) and runs a NETWORK
+  # resolution step → EAI_AGAIN in the sandbox. Downgrading yarn to 4.1.1 is not
+  # an option (nixpkgs' berry-4 offline patch doesn't apply to 4.1.1). Instead
+  # relabel the lockfile v8→v9: the v8→v9 delta is only added .yarnrc settings
+  # (approvedGitRepositories, enableScripts), not lockfile-entry format, so the
+  # existing resolutions stay valid — and 4.14.1 now sees a current lockfile and
+  # installs fully offline. The anchor (line after `__metadata:`) avoids touching
+  # any package whose version happens to be `8`.
+  lockV9Src = applyPatches {
+    inherit src;
+    name = "ryot-src-lock-v9";
+    postPatch = ''
+      sed -i '/^__metadata:/{n;s/^  version: 8$/  version: 9/}' yarn.lock
+    '';
+  };
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "ryot-frontend";
-  inherit version src;
+  inherit version;
+  src = lockV9Src;
 
   # The config hook validates $missingHashes (a derivation-level var) against the
   # copy baked into offlineCache, so it must be set here too — not only inside
@@ -53,7 +56,8 @@ stdenv.mkDerivation (finalAttrs: {
   missingHashes = ./missing-hashes.json;
 
   offlineCache = fetchYarnBerryDeps {
-    inherit (finalAttrs) src;
+    inherit (finalAttrs) src; # the v9-relabelled tree, so the config hook's
+    # source-vs-offline yarn.lock consistency check passes.
     # Platform-specific optional binaries (e.g. @biomejs/cli-darwin-arm64,
     # @rollup/rollup-*, esbuild-*) have no self-describing hash in yarn.lock, so
     # the fetcher needs them supplied. Regenerate on bump with:
@@ -62,8 +66,8 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-lqNKHtGSRyQkD2OK8pP9gnqq6+ASdshPaxeLrmxHroI=";
   };
 
-  # Drop the yarnPath launcher pin so the (matching-4.1.1) nixpkgs yarn is used
-  # rather than re-execing the project's committed, non-offline-patched binary.
+  # Drop the yarnPath launcher pin so the nixpkgs yarn (offline-patched) is used
+  # rather than re-execing the project's committed, non-patched 4.1.1 binary.
   postPatch = ''
     substituteInPlace .yarnrc.yml \
       --replace-fail 'yarnPath: .yarn/releases/yarn-4.1.1.cjs' ""
@@ -71,7 +75,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     nodejs_24
-    yarnBerry
+    yarn-berry_4
     yarnBerryConfigHook # runs `yarn install --immutable` from offlineCache
   ];
 
