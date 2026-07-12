@@ -33,10 +33,12 @@ stdenv.mkDerivation (finalAttrs: {
 
   offlineCache = fetchYarnBerryDeps {
     inherit (finalAttrs) src;
-    # Fixed-output: fetches every workspace's deps from the 744 KB yarn.lock.
-    # All 3 @patch: entries are Yarn builtins (fsevents/resolve/typescript), so
-    # no missing-hashes.json is required.
-    hash = lib.fakeHash; # TODO: pin from the FOD build error
+    # Platform-specific optional binaries (e.g. @biomejs/cli-darwin-arm64,
+    # @rollup/rollup-*, esbuild-*) have no self-describing hash in yarn.lock, so
+    # the fetcher needs them supplied. Regenerate on bump with:
+    #   yarn-berry-fetcher missing-hashes yarn.lock > missing-hashes.json
+    missingHashes = ./missing-hashes.json;
+    hash = "sha256-lqNKHtGSRyQkD2OK8pP9gnqq6+ASdshPaxeLrmxHroI=";
   };
 
   nativeBuildInputs = [
