@@ -31,6 +31,11 @@ stdenv.mkDerivation (finalAttrs: {
   pname = "ryot-frontend";
   inherit version src;
 
+  # The config hook validates $missingHashes (a derivation-level var) against the
+  # copy baked into offlineCache, so it must be set here too — not only inside
+  # fetchYarnBerryDeps.
+  missingHashes = ./missing-hashes.json;
+
   offlineCache = fetchYarnBerryDeps {
     inherit (finalAttrs) src;
     # Platform-specific optional binaries (e.g. @biomejs/cli-darwin-arm64,
