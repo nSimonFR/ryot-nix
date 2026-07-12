@@ -113,11 +113,12 @@ stdenv.mkDerivation (finalAttrs: {
     cp -a apps/frontend/build         "$dest/build"
     cp -a apps/frontend/node_modules  "$dest/node_modules"
     cp -a apps/frontend/package.json  "$dest/package.json"
-    # apps/frontend/node_modules/@ryot/{graphql,generated,ts-utils} are workspace
-    # symlinks resolving to <root>/libs/* (relative), which react-router-serve
-    # imports at runtime. Ship the built libs at the matching relative location
-    # so the symlinks aren't dangling (else stdenv's noBrokenSymlinks fails).
-    cp -a libs                        "$dest/libs"
+
+    # The @ryot/* workspace deps are bundled into build/server by Vite at build
+    # time (the upstream container ships these same node_modules symlinks dangling
+    # and runs fine), so their now-broken links are unused at runtime. Drop all
+    # broken symlinks so the store path is self-contained (stdenv noBrokenSymlinks).
+    find "$dest/node_modules" -xtype l -delete
 
     mkdir -p $out/bin
     cat > $out/bin/ryot-frontend <<EOF
