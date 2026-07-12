@@ -46,6 +46,23 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-lqNKHtGSRyQkD2OK8pP9gnqq6+ASdshPaxeLrmxHroI=";
   };
 
+  # nixpkgs' yarn-berry_4 is 4.14.1 while Ryot pins yarn 4.1.1. When 4.14.1's
+  # offline install reads Ryot's version-8 lockfile it wants to apply
+  # LOCKFILE_MIGRATION_RULES (which write settings) — forbidden offline, so it
+  # throws ("expects lockfile version 8..."). The rules matching a <9 lockfile
+  # are `approvedGitRepositories` and `enableScripts`; once their config source
+  # is defined the migration is skipped. Also drop yarnPath so the nixpkgs yarn
+  # (not the pinned 4.1.1 launcher) is used consistently through the build.
+  postPatch = ''
+    substituteInPlace .yarnrc.yml \
+      --replace-fail 'yarnPath: .yarn/releases/yarn-4.1.1.cjs' ""
+    {
+      echo 'approvedGitRepositories:'
+      echo '  - "**"'
+      echo 'enableScripts: true'
+    } >> .yarnrc.yml
+  '';
+
   nativeBuildInputs = [
     nodejs_24
     yarn-berry_4
