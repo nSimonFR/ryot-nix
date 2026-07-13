@@ -16,8 +16,14 @@
 # - DB migrations are embedded (crates/migrations, sea-orm-migration) and run at
 #   startup, so there is nothing DB-related at build time.
 # - Release profile sets lto=true + codegen-units=1 (upstream Cargo.toml): the
-#   compile is slow and RAM-hungry — build it on a real builder (garnix/x86),
-#   never on a 4 GB Pi.
+#   compile is slow and RAM-hungry. On the 4 GB Pi, stop heavy services first
+#   (nixos-rebuild-safe) or build it on an x86 box and push to a binary cache.
+# - crates/utils/env reads APP_VERSION + UNKEY_ROOT_KEY via env!() at COMPILE
+#   time (not build.rs), so both must be present in the build environment or the
+#   `env-utils` crate fails with "environment variable not defined at compile
+#   time". Upstream CI sets APP_VERSION=<tag> and UNKEY_ROOT_KEY=<secret>;
+#   UNKEY_ROOT_KEY is only used for Ryot's hosted licensing, so "" is correct
+#   for a self-hosted (community) build. See ci main.yml build-backend step.
 {
   lib,
   stdenv,
@@ -47,6 +53,14 @@ rustPlatform.buildRustPackage {
 
   # No tests in the release build path; the workspace test suite needs a live DB.
   doCheck = false;
+
+  # Compile-time env!() vars read by crates/utils/env (see header note).
+  # APP_VERSION matches upstream's tag format ("v<version>"); UNKEY_ROOT_KEY is
+  # unused in self-hosted builds so an empty string is correct.
+  env = {
+    APP_VERSION = "v${version}";
+    UNKEY_ROOT_KEY = "";
+  };
 
   # Single-member workspace → the default build already yields just `backend`.
   meta = {
