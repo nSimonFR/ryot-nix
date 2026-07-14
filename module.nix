@@ -138,7 +138,11 @@ in
           ProtectKernelTunables = true;
           ProtectKernelModules = true;
           ProtectControlGroups = true;
-          RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+          # AF_NETLINK is required by the Node frontend: react-router-serve calls
+          # os.networkInterfaces() on listen (to print its startup URL), which uses
+          # a netlink socket. Without it the frontend crash-loops with
+          # "uv_interface_addresses returned ... EAFNOSUPPORT (97)".
+          RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
           LockPersonality = true;
           RestrictRealtime = true;
         } // lib.optionalAttrs (cfg.environmentFile != null) {
@@ -153,7 +157,12 @@ in
           requires = [ "postgresql.service" ];
           wantedBy = [ "multi-user.target" ];
           environment = {
-            BACKEND_PORT = toString cfg.backendPort;
+            # Ryot's Rust config reads the backend bind port/host from the
+            # SERVER_-prefixed env (ServerConfig, env_prefix="SERVER_"); a bare
+            # BACKEND_PORT is ignored and the server falls back to 0.0.0.0:5000,
+            # which the Caddy proxy (CADDY_BACKEND_TARGET below) can't reach → 502.
+            SERVER_BACKEND_PORT = toString cfg.backendPort;
+            SERVER_BACKEND_HOST = loopback;
             FRONTEND_URL = cfg.frontendUrl;
           } // cfg.settings;
           serviceConfig = hardening // {
