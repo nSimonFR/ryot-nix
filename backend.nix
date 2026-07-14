@@ -70,6 +70,17 @@ rustPlatform.buildRustPackage {
   env = {
     APP_VERSION = "v${version}";
     UNKEY_ROOT_KEY = "";
+
+    # Disable upstream's release-profile whole-program LTO (lto=true,
+    # codegen-units=1). That combo is a deliberately slow, very RAM-hungry
+    # optimization — on the 4 GB Pi the final LTO link OOM-thrashes and pushes the
+    # compile past 40 min. These CARGO_PROFILE_RELEASE_* env vars override the
+    # Cargo.toml profile at build time; the binary is marginally larger / slightly
+    # less optimized, which is irrelevant for a self-hosted tracker but cuts the
+    # compile and its peak memory dramatically. Drop these to restore upstream LTO
+    # if building on a big x86 box + pushing to a binary cache.
+    CARGO_PROFILE_RELEASE_LTO = "false";
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16";
   };
 
   # Single-member workspace → the default build already yields just `backend`.
