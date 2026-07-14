@@ -71,14 +71,21 @@ rustPlatform.buildRustPackage {
     APP_VERSION = "v${version}";
     UNKEY_ROOT_KEY = "";
 
-    # Disable upstream's release-profile whole-program LTO (lto=true,
-    # codegen-units=1). That combo is a deliberately slow, very RAM-hungry
-    # optimization — on the 4 GB Pi the final LTO link OOM-thrashes and pushes the
-    # compile past 40 min. These CARGO_PROFILE_RELEASE_* env vars override the
-    # Cargo.toml profile at build time; the binary is marginally larger / slightly
-    # less optimized, which is irrelevant for a self-hosted tracker but cuts the
-    # compile and its peak memory dramatically. Drop these to restore upstream LTO
-    # if building on a big x86 box + pushing to a binary cache.
+    # Building this large Rust workspace on the 4 GB Pi is memory-bound, not
+    # CPU-bound. Two levers keep it under the OOM line (earlyoom kills the build
+    # the moment swap hits 0, which it does with the default wide parallelism):
+    #
+    #  * CARGO_BUILD_JOBS=1 — compile ONE crate at a time. This is the decisive
+    #    lever: peak RAM ≈ the single largest crate instead of (cores × crates).
+    #    Slower wall-clock, but it actually finishes instead of being SIGTERM'd.
+    #  * LTO off + codegen-units=16 — skip upstream's lto=true/codegen-units=1
+    #    whole-program optimization (a slow, RAM-hungry link) and split each crate
+    #    into smaller codegen units to lower per-crate peak memory. The binary is
+    #    marginally larger / less optimized, irrelevant for a self-hosted tracker.
+    #
+    # Restore upstream LTO (drop these) only when building on a big x86 box and
+    # pushing to a binary cache.
+    CARGO_BUILD_JOBS = "1";
     CARGO_PROFILE_RELEASE_LTO = "false";
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS = "16";
   };
