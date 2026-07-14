@@ -36,15 +36,17 @@
             hash = "sha256-Fpn2IkQoQwOUkk31l66HIpCYLyWogy/7vEJys0K9uEk=";
           };
 
-          backend = pkgs.callPackage ./backend.nix { inherit src version; };
+          templates = pkgs.callPackage ./templates.nix { inherit src version; };
+          backend = pkgs.callPackage ./backend.nix { inherit src version templates; };
           frontend = pkgs.callPackage ./frontend.nix { inherit src version; };
           ryot = pkgs.callPackage ./package.nix { inherit src version backend frontend; };
         in
         {
           packages = {
-            inherit backend frontend ryot;
+            inherit backend frontend ryot templates;
             ryot-backend = backend;
             ryot-frontend = frontend;
+            ryot-templates = templates;
             default = ryot;
           };
         };

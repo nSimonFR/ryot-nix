@@ -32,6 +32,7 @@
   pkg-config,
   src,
   version,
+  templates,
 }:
 
 let
@@ -48,6 +49,15 @@ rustPlatform.buildRustPackage {
   cargoLock = {
     lockFile = "${src}/Cargo.lock";
   };
+
+  # The notification crate embeds HTML via askama `#[template(path=...)]` at
+  # compile time, but the repo .gitignore's every `templates/` dir so the source
+  # tarball omits them. Drop the react-email-rendered HTML (see templates.nix)
+  # into the crate before cargo build, mirroring upstream's `copy-templates`.
+  postPatch = ''
+    mkdir -p crates/services/notification/templates
+    cp -a ${templates}/. crates/services/notification/templates/
+  '';
 
   nativeBuildInputs = [ pkg-config ];
 
