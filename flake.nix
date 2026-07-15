@@ -28,12 +28,12 @@
 
           # Single source of truth for the upstream tag + tarball, shared by the
           # backend (Rust) and frontend (Node) derivations so they never drift.
-          version = "10.3.18";
+          version = "10.4.0";
           src = pkgs.fetchFromGitHub {
             owner = "IgnisDa";
             repo = "ryot";
             rev = "v${version}";
-            hash = "sha256-Fpn2IkQoQwOUkk31l66HIpCYLyWogy/7vEJys0K9uEk=";
+            hash = "sha256-MGUz4hzj2OezwUiH3RMxz17fOOz37I3o7STAq8MF1hk=";
           };
 
           templates = pkgs.callPackage ./templates.nix { inherit src version; };
