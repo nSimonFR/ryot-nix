@@ -71,6 +71,16 @@ stdenv.mkDerivation (finalAttrs: {
   postPatch = ''
     substituteInPlace .yarnrc.yml \
       --replace-fail 'yarnPath: .yarn/releases/yarn-4.1.1.cjs' ""
+
+    # Serve the SSR frontend under the /ryot/ sub-path (fronted by the nic-os
+    # single 443 Tailscale-Funnel front-proxy; Ryot's SPA has no runtime base
+    # support so this must be baked in at build time). React-Router 7 `basename`
+    # + matching Vite `base`, both trailing-slash. Touches only *.config.ts, NOT
+    # yarn.lock, so the offlineCache/missingHashes FOD hashes stay valid.
+    substituteInPlace apps/frontend/react-router.config.ts \
+      --replace-fail 'ssr: true,' 'ssr: true, basename: "/ryot/",'
+    substituteInPlace apps/frontend/vite.config.ts \
+      --replace-fail 'export default defineConfig({' 'export default defineConfig({ base: "/ryot/",'
   '';
 
   nativeBuildInputs = [
