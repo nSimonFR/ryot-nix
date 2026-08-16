@@ -81,6 +81,21 @@ stdenv.mkDerivation (finalAttrs: {
       --replace-fail 'ssr: true,' 'ssr: true, basename: "/ryot/",'
     substituteInPlace apps/frontend/vite.config.ts \
       --replace-fail 'export default defineConfig({' 'export default defineConfig({ base: "/ryot/",'
+
+    # The PWA surface does not follow the Vite `base` above. root.tsx writes the
+    # manifest/apple-touch-icon <link>s as literal root-absolute strings inside
+    # JSX (Vite only re-roots asset URLs it resolves, not string props), and
+    # public/manifest.json is copied verbatim. Left alone, /manifest.json 404s
+    # behind the front-proxy, the iOS home-screen icon 404s, and the manifest
+    # scopes the installed app to the domain root rather than to Ryot. The icon
+    # `src`s inside the manifest are already relative, so they resolve against
+    # its own /ryot/ URL and need no change.
+    substituteInPlace apps/frontend/app/root.tsx \
+      --replace-fail 'href="/manifest.json"' 'href="/ryot/manifest.json"' \
+      --replace-fail 'href="/icons/maskable_icon_x180.png"' 'href="/ryot/icons/maskable_icon_x180.png"'
+    substituteInPlace apps/frontend/public/manifest.json \
+      --replace-fail '"scope": "/",' '"scope": "/ryot/",' \
+      --replace-fail '"start_url": "/",' '"start_url": "/ryot/",'
   '';
 
   nativeBuildInputs = [
