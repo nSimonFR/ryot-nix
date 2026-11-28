@@ -47,7 +47,7 @@ stdenv.mkDerivation (finalAttrs: {
   offlineCache = fetchYarnBerryDeps {
     inherit (finalAttrs) src;
     missingHashes = ./missing-hashes.json;
-    hash = "sha256-dehAH4W/uDurdCPFkwlgSkpciodslojWd0TxCTUb0L8=";
+    hash = "sha256-ufr5Qrm0y+sRVWrAEtJfGrhXPAjtg3wNwCbEmebZU7U=";
   };
 
   postPatch = ''
